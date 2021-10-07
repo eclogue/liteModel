@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "es2020",
+      "es2020.bigint",
+      "es2020.string",
+      "es2020.symbol.wellknown"
+    ],
+    "module": "commonjs",
+    "target": "es2019",
+    "moduleResolution": "node",
+    "importHelpers": false,
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "baseUrl": "./",
+    "strict": true,
+    "paths": {
+      "@/*": ["lib/*"]
+    },
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true /* Skip type checking of declaration files. */
+    // "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
+  },
+  "include": ["mock/**/*", "lib/**/*", "typings.d.ts"],
+  "exclude": ["node_modules", "dist", "**/__test__", "test", "docs", "tests"]
+}
