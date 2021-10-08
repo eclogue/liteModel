@@ -1,4 +1,3 @@
-import R, { any } from 'ramda';
 import { sprintf } from 'printj'
 import { Dict } from './interface';
 
@@ -61,7 +60,7 @@ export default class Parser {
       } else {
         const node: Node = {
           type: 'logical',
-          name: R.prop(key, LOGICAL),
+          name: LOGICAL[key],
           value,
           isChild,
         };

@@ -1,5 +1,4 @@
 import Sqlite from 'better-sqlite3';
-import path from 'path';
 import Builder from './builder';
 import { Dict } from './interface';
 
@@ -9,7 +8,7 @@ export type DeepPartial<T> =
 
 export type DataObject<T extends object> = T | DeepPartial<T>;
 
-export default class Base {
+export class Base {
   db: any;
   table: string;
   definition: Partial<object>;
@@ -32,6 +31,9 @@ export default class Base {
     return {};
   }
 
+  exec(sql: string) {
+    return this.db.exec(sql);
+  }
 
   find(options: Dict) {
     const { where = {}, limit, offset, order, fields, group } = options;
@@ -120,8 +122,30 @@ export default class Base {
   }
 }
 
-const model = new Base('./test.db', 'COMPANY');
+const model = new Base('./test.db', 'users');
+// const res = model.exec(`CREATE TABLE users (
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   name CHAR(50) NOT NULL,
+//   gender CHAR(10) CHECK(gender IN('male', 'female', 'unknown')) NOT NULL,
+//   mail CHAR(128) NOT NULL,
+//   age INT NOT NULL,
+//   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+//   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+// );
+// `);
+// console.log(res);
+// model.insert({
+//   name: 'tommy',
+//   gender: 'male',
+//   age: 30,
+//   mail: 'tommy@hello.cc',
+// });
 
-model.insert({ ID: 4, NAME: 'Tommy', AGE: 30, ADDRESS: 'CN', SALARY: 22000 })
-const res = model.find({ where: { ID: { '$gte': 1 } } });
-console.log(res);
+// model.insert({
+//   name: 'jerry',
+//   gender: 'female',
+//   age: 31,
+//   mail: 'jerry@world.cc',
+// });
+// const records = model.findOne({ where: { id: { '$gte': 1 } } });
+// console.log(records);

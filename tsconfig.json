@@ -1,26 +1,17 @@
 {
   "compilerOptions": {
-    "lib": [
-      "es2020",
-      "es2020.bigint",
-      "es2020.string",
-      "es2020.symbol.wellknown"
-    ],
+    "target": "ES2018",
     "module": "commonjs",
-    "target": "es2019",
-    "moduleResolution": "node",
-    "importHelpers": false,
+    "declaration": true,
+    "sourceMap": false,
+    "allowJs": true,
+    "rootDir": "lib",
+    "outDir": "dist",
     "esModuleInterop": true,
-    "sourceMap": true,
-    "baseUrl": "./",
-    "strict": true,
-    "paths": {
-      "@/*": ["lib/*"]
-    },
-    "allowSyntheticDefaultImports": true,
-    "skipLibCheck": true /* Skip type checking of declaration files. */
-    // "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
+    "removeComments": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
-  "include": ["mock/**/*", "lib/**/*", "typings.d.ts"],
+  "include": ["lib/**/*", "lib/typings.d.ts"],
   "exclude": ["node_modules", "dist", "**/__test__", "test", "docs", "tests"]
 }
