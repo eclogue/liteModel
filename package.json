@@ -1,6 +1,6 @@
 {
   "name": "lite-model",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "lib/model.js",
   "scripts": {
     "build": "tsc --build",
