@@ -3,7 +3,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const ramda_1 = require("ramda");
 const parser_1 = __importDefault(require("./parser"));
 const printj_1 = require("printj");
 class Builder {
@@ -120,7 +119,7 @@ class Builder {
             params.push(data[field]);
         }
         const fieldStr = fields.join(',');
-        const placeholder = (0, ramda_1.repeat)('?', fields.length).join(',');
+        const placeholder = fields.map(_ => '?').join(',');
         const sql = 'INSERT INTO `%s` (%s) VALUES (%s)';
         const preSql = (0, printj_1.sprintf)(sql, this.tableName, fieldStr, placeholder);
         return { sql: preSql, params };
@@ -152,13 +151,3 @@ class Builder {
     ;
 }
 exports.default = Builder;
-// const instance = new Builder({});
-// const res = instance.table('users')
-//   .where({ userId: { '$gt': 446 } })
-//   .order({ id: 'desc' })
-//   .group('name')
-//   .limit(1)
-//   .offset(10)
-//   .select();
-// console.log(res);
-// console.log(instance.table('photo').where({ id: 1 }).update({ a: 1 }))

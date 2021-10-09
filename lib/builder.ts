@@ -1,4 +1,3 @@
-import { isEmpty, repeat, toString } from "ramda";
 import Parser from "./parser";
 import { Dict } from './interface';
 import { sprintf } from 'printj';
@@ -136,7 +135,7 @@ export default class Builder {
       params.push(data[field]);
     }
     const fieldStr = fields.join(',');
-    const placeholder = repeat('?', fields.length).join(',');
+    const placeholder = fields.map(_ => '?').join(',');
     const sql = 'INSERT INTO `%s` (%s) VALUES (%s)';
     const preSql = sprintf(sql, this.tableName, fieldStr, placeholder);
     return { sql: preSql, params };
@@ -167,15 +166,3 @@ export default class Builder {
     this.sql = {};
   };
 }
-
-// const instance = new Builder({});
-// const res = instance.table('users')
-//   .where({ userId: { '$gt': 446 } })
-//   .order({ id: 'desc' })
-//   .group('name')
-//   .limit(1)
-//   .offset(10)
-//   .select();
-// console.log(res);
-
-// console.log(instance.table('photo').where({ id: 1 }).update({ a: 1 }))

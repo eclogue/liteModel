@@ -3,30 +3,84 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Base = void 0;
+exports.Model = void 0;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const builder_1 = __importDefault(require("./builder"));
-class Base {
-    constructor(db, table, options = {}) {
-        this.db = (0, better_sqlite3_1.default)(db, {
-            timeout: 10000,
-            readonly: false,
-        });
+class Database {
+    constructor(file, options = {}) {
+        this.db = (0, better_sqlite3_1.default)(file, options);
+    }
+    static getInstance(file, options = {}) {
+        if (Database.instance) {
+            return Database.instance;
+        }
+        return new Database(file, options);
+    }
+}
+class Model {
+    constructor(db, table, definition = {}) {
+        this.dbFile = '';
+        this.dbFile = db;
         this.table = table;
-        this.definition = {};
-        this.properties = {};
+        this.definition = definition;
+        this.attributes = {};
+        this.changed = {};
+        this.initialize();
+    }
+    initialize() {
+        if (!this.db) {
+            this.db = Database.getInstance(this.dbFile).db;
+        }
+        for (const key in this.definition) {
+            if (this.definition[key].pk) {
+                this.pk = key;
+                break;
+            }
+        }
     }
     attr(name, value) {
-        this.properties[name] = value;
+        if (name === this.pk) {
+            this.pk = value;
+        }
+        this.attributes[name] = value;
+    }
+    instance(data) {
+        const instance = new Model(this.dbFile, this.table, this.definition);
+        for (const key in data) {
+            instance.attr(key, data[key]);
+        }
+        const handler = {
+            get(target, key) {
+                if (Reflect.has(target.changed, key)) {
+                    return Reflect.get(target.changed, key);
+                }
+                if (Reflect.has(target.attributes, key)) {
+                    return Reflect.get(target.attributes, key);
+                }
+                if (typeof this[key] === 'function') {
+                    return this[key];
+                }
+                return null;
+            },
+            set(target, key, value) {
+                target.changed[key] = value;
+                return true;
+            }
+        };
+        const proxy = new Proxy(instance, handler);
+        return proxy;
     }
     toObject() {
-        return {};
+        return this.attributes;
+    }
+    toJSON() {
+        return this.toJSON();
     }
     exec(sql) {
         return this.db.exec(sql);
     }
-    find(options) {
-        const { where = {}, limit, offset, order, fields, group } = options;
+    find(where, options = {}) {
+        const { limit, offset, order, fields, group } = options;
         const builder = new builder_1.default({});
         const { sql, params } = builder.table(this.table)
             .where(where)
@@ -39,22 +93,25 @@ class Base {
         const stmt = this.db.prepare(sql);
         return stmt.all(...params);
     }
-    findOne(options = {}) {
+    findOne(where, options = {}) {
         options.limit = 1;
-        const res = this.find(options);
+        const res = this.find(where, options);
         if (res.length) {
-            return res[0];
+            return this.instance(res[0]);
         }
         return null;
     }
-    findAll(options = {}) {
-        return this.find(options);
+    findAll(where, options = {}) {
+        return this.find(where, options);
     }
     findById(id) {
-        return this.findOne({ where: { id } });
+        return this.findOne({ id });
     }
     findByIds(ids) {
-        return this.findOne({ where: { id: { '$in': ids } } });
+        const data = this.find({ id: { '$in': ids } });
+        if (!data.length) {
+            return data;
+        }
     }
     insert(data) {
         const builder = new builder_1.default({});
@@ -69,7 +126,6 @@ class Base {
         return this.db.prepare(sql).run(...params);
     }
     upsert(data) {
-        // @fixme
         if (!data.id) {
             throw new Error('ID not found');
         }
@@ -80,6 +136,10 @@ class Base {
         return this.insert(data);
     }
     save() {
+        if (!this.pk) {
+            throw new Error('save must be called on instance');
+        }
+        return this.update({ id: this.pk }, this.changed);
     }
     deleteById(id) {
         const record = this.findById(id);
@@ -90,39 +150,14 @@ class Base {
         const { sql, params } = builder.table(this.table)
             .where({ id })
             .delete();
-        return this.db.prepare(sql, params);
+        return this.db.prepare(sql).run(...params);
     }
     delete(where) {
         const builder = new builder_1.default({});
         const { sql, params } = builder.table(this.table)
             .where(where)
             .delete();
+        return this.db.prepare(sql).run(...params);
     }
 }
-exports.Base = Base;
-const model = new Base('./test.db', 'users');
-// const res = model.exec(`CREATE TABLE users (
-//   id INTEGER PRIMARY KEY AUTOINCREMENT,
-//   name CHAR(50) NOT NULL,
-//   gender CHAR(10) CHECK(gender IN('male', 'female', 'unknown')) NOT NULL,
-//   mail CHAR(128) NOT NULL,
-//   age INT NOT NULL,
-//   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-//   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-// );
-// `);
-// console.log(res);
-// model.insert({
-//   name: 'tommy',
-//   gender: 'male',
-//   age: 30,
-//   mail: 'tommy@hello.cc',
-// });
-// model.insert({
-//   name: 'jerry',
-//   gender: 'female',
-//   age: 31,
-//   mail: 'jerry@world.cc',
-// });
-// const records = model.findOne({ where: { id: { '$gte': 1 } } });
-// console.log(records);
+exports.Model = Model;

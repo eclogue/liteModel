@@ -1,6 +1,6 @@
 {
   "name": "lite-model",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "main": "lib/model.js",
   "scripts": {
     "build": "tsc --build",
@@ -11,10 +11,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.33.0",
+    "@typescript-eslint/parser": "^4.33.0",
     "better-sqlite3": "^7.4.3",
-    "printj": "^1.3.0",
-    "ramda": "^0.27.1",
-    "sprintf-js": "^1.1.2"
+    "eslint": "^7.32.0",
+    "printj": "^1.3.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.4.0",

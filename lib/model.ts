@@ -1,42 +1,99 @@
 import Sqlite from 'better-sqlite3';
 import Builder from './builder';
-import { Dict } from './interface';
+import { Dict, Definition } from './interface';
 
-export type DeepPartial<T> =
-  | Partial<T> // handle free-form properties, e.g. DeepPartial<AnyObject>
-  | { [P in keyof T]?: DeepPartial<T[P]> };
+class Database {
+  readonly db: Sqlite.Database | null;
+  private static instance: Database;
+  private constructor(file: string, options: Dict = {}) {
+    this.db = Sqlite(file, options)
+  }
 
-export type DataObject<T extends object> = T | DeepPartial<T>;
+  static getInstance(file: string, options: Dict = {}) {
+    if (Database.instance) {
+      return Database.instance;
+    }
+    return new Database(file, options);
+  }
+}
 
-export class Base {
+export class Model {
   db: any;
+  readonly dbFile: string = '';
   table: string;
-  definition: Partial<object>;
-  properties: { [name: string]: unknown };
-  constructor(db: string, table: string, options: any = {}) {
-    this.db = Sqlite(db, {
-      timeout: 10000,
-      readonly: false,
-    });
+  definition: Definition;
+  attributes: Dict;
+  changed: Dict;
+  pk: string;
+  constructor(db: string, table: string, definition: Definition = {}) {
+    this.dbFile = db;
     this.table = table;
-    this.definition = {};
-    this.properties = {};
+    this.definition = definition;
+    this.attributes = {};
+    this.changed = {};
+    this.initialize();
+  }
+
+  initialize() {
+    if (!this.db) {
+      this.db = Database.getInstance(this.dbFile).db;
+    }
+    for (const key in this.definition) {
+      if (this.definition[key].pk) {
+        this.pk = key;
+        break;
+      }
+    }
   }
 
   attr(name: string, value: any) {
-    this.properties[name] = value;
+    if (name === this.pk) {
+      this.pk = value;
+    }
+    this.attributes[name] = value;
+  }
+
+  instance(data: Dict) {
+    const instance = new Model(this.dbFile, this.table, this.definition);
+    for (const key in data) {
+      instance.attr(key, data[key]);
+    }
+    const handler = {
+      get(target: any, key: string) {
+        if (Reflect.has(target.changed, key)) {
+          return Reflect.get(target.changed, key);
+        }
+        if (Reflect.has(target.attributes, key)) {
+          return Reflect.get(target.attributes, key);
+        }
+        if (typeof this[key] === 'function') {
+          return this[key];
+        }
+        return null;
+      },
+      set(target: any, key: string, value: any): boolean {
+        target.changed[key] = value;
+        return true;
+      }
+    };
+    const proxy = new Proxy(instance, handler);
+    return proxy;
   }
 
   toObject() {
-    return {};
+    return this.attributes;
+  }
+
+  toJSON() {
+    return this.toJSON();
   }
 
   exec(sql: string) {
     return this.db.exec(sql);
   }
 
-  find(options: Dict) {
-    const { where = {}, limit, offset, order, fields, group } = options;
+  find(where: Dict, options: Dict = {}) {
+    const { limit, offset, order, fields, group } = options;
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table)
       .where(where)
@@ -51,25 +108,28 @@ export class Base {
   }
 
 
-  findOne(options: Dict = {}) {
+  findOne(where: Dict, options: Dict = {}) {
     options.limit = 1;
-    const res = this.find(options);
+    const res = this.find(where, options);
     if (res.length) {
-      return res[0];
+      return this.instance(res[0]);
     }
     return null;
   }
 
-  findAll(options: Dict = {}) {
-    return this.find(options);
+  findAll(where: Dict, options: Dict = {}) {
+    return this.find(where, options);
   }
 
   findById(id: string | number) {
-    return this.findOne({ where: { id } });
+    return this.findOne({ id });
   }
 
   findByIds(ids: any[]) {
-    return this.findOne({ where: { id: { '$in': ids } } });
+    const data = this.find({ id: { '$in': ids } });
+    if (!data.length) {
+      return data;
+    }
   }
 
   insert(data: Dict) {
@@ -87,7 +147,6 @@ export class Base {
   }
 
   upsert(data: Dict) {
-    // @fixme
     if (!data.id) {
       throw new Error('ID not found');
     }
@@ -99,7 +158,10 @@ export class Base {
   }
 
   save() {
-
+    if (!this.pk) {
+      throw new Error('save must be called on instance');
+    }
+    return this.update({ id: this.pk }, this.changed);
   }
 
   deleteById(id: string | number) {
@@ -111,7 +173,7 @@ export class Base {
     const { sql, params } = builder.table(this.table)
       .where({ id })
       .delete();
-    return this.db.prepare(sql, params);
+    return this.db.prepare(sql).run(...params);
   }
 
   delete(where: Dict) {
@@ -119,33 +181,6 @@ export class Base {
     const { sql, params } = builder.table(this.table)
       .where(where)
       .delete();
+    return this.db.prepare(sql).run(...params);
   }
 }
-
-const model = new Base('./test.db', 'users');
-// const res = model.exec(`CREATE TABLE users (
-//   id INTEGER PRIMARY KEY AUTOINCREMENT,
-//   name CHAR(50) NOT NULL,
-//   gender CHAR(10) CHECK(gender IN('male', 'female', 'unknown')) NOT NULL,
-//   mail CHAR(128) NOT NULL,
-//   age INT NOT NULL,
-//   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-//   updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-// );
-// `);
-// console.log(res);
-// model.insert({
-//   name: 'tommy',
-//   gender: 'male',
-//   age: 30,
-//   mail: 'tommy@hello.cc',
-// });
-
-// model.insert({
-//   name: 'jerry',
-//   gender: 'female',
-//   age: 31,
-//   mail: 'jerry@world.cc',
-// });
-// const records = model.findOne({ where: { id: { '$gte': 1 } } });
-// console.log(records);
