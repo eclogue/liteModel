@@ -32,7 +32,7 @@ export default class Builder {
     if (Array.isArray(data)) {
       return !Boolean(data.length);
     }
-    return !Boolean(Object.keys(data));
+    return !Boolean(Object.keys(data).length);
   }
 
   fields(fields: string[]): Builder {
@@ -124,7 +124,7 @@ export default class Builder {
     const upSql = `UPDATE \`%s\` SET %s %s`;
     const sqlStr = sprintf(upSql, this.tableName, setSql.join(','), sql);
     this.free();
-    return { sql: sqlStr, params };
+    return { sql: sqlStr, params: changed };
   }
 
   insert(data: Dict) {
@@ -164,5 +164,5 @@ export default class Builder {
     this._fields = [];
     this.values = [];
     this.sql = {};
-  };
+  }
 }

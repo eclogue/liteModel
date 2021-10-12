@@ -25,7 +25,7 @@ class Builder {
         if (Array.isArray(data)) {
             return !Boolean(data.length);
         }
-        return !Boolean(Object.keys(data));
+        return !Boolean(Object.keys(data).length);
     }
     fields(fields) {
         if (this.isEmpty(fields)) {

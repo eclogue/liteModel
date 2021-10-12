@@ -18,25 +18,27 @@ class Database {
 }
 
 export class Model {
-  db: any;
-  readonly dbFile: string = '';
+  db: Sqlite.Database;
+  dbFile: string;
   table: string;
   definition: Definition;
   attributes: Dict;
   changed: Dict;
   pk: string;
-  constructor(db: string, table: string, definition: Definition = {}) {
-    this.dbFile = db;
-    this.table = table;
+  constructor(definition: Definition = {}, dbFile?: string, table?: string,) {
     this.definition = definition;
     this.attributes = {};
     this.changed = {};
-    this.initialize();
+    this.dbFile = dbFile;
+    this.table = table;
   }
 
   initialize() {
-    if (!this.db) {
+    if (!this.db && this.dbFile) {
       this.db = Database.getInstance(this.dbFile).db;
+    }
+    if (this.pk) {
+      return;
     }
     for (const key in this.definition) {
       if (this.definition[key].pk) {
@@ -53,12 +55,19 @@ export class Model {
     this.attributes[name] = value;
   }
 
+  clone<T>(instance: T): T {
+    return Object.assign(Object.create(Model.prototype), instance);
+  }
+
   instance(data: Dict) {
-    const instance = new Model(this.dbFile, this.table, this.definition);
+    const instance = this.clone(this);
     for (const key in data) {
       instance.attr(key, data[key]);
     }
     const handler = {
+      constructor(target, args) {
+        return new target(...args);
+      },
       get(target: any, key: string) {
         if (Reflect.has(target.changed, key)) {
           return Reflect.get(target.changed, key);
@@ -66,13 +75,17 @@ export class Model {
         if (Reflect.has(target.attributes, key)) {
           return Reflect.get(target.attributes, key);
         }
-        if (typeof this[key] === 'function') {
-          return this[key];
+        if (Reflect.has(instance, key)) {
+          return instance[key];
         }
-        return null;
+        return undefined;
       },
       set(target: any, key: string, value: any): boolean {
-        target.changed[key] = value;
+        if (value instanceof Function) {
+          target[key] = value;
+        } else {
+          target.changed[key] = value;
+        }
         return true;
       }
     };
@@ -80,19 +93,19 @@ export class Model {
     return proxy;
   }
 
-  toObject() {
+  toObject(): Dict {
     return this.attributes;
   }
 
-  toJSON() {
-    return this.toJSON();
+  toJSON(): Dict {
+    return this.toObject();
   }
 
-  exec(sql: string) {
+  exec(sql: string): any {
     return this.db.exec(sql);
   }
 
-  find(where: Dict, options: Dict = {}) {
+  find(where: Dict, options: Dict = {}): Dict[] {
     const { limit, offset, order, fields, group } = options;
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table)
@@ -108,7 +121,7 @@ export class Model {
   }
 
 
-  findOne(where: Dict, options: Dict = {}) {
+  findOne(where: Dict, options: Dict = {}): Dict | null {
     options.limit = 1;
     const res = this.find(where, options);
     if (res.length) {
@@ -117,36 +130,46 @@ export class Model {
     return null;
   }
 
-  findAll(where: Dict, options: Dict = {}) {
+  findAll(where: Dict, options: Dict = {}): Dict[] {
     return this.find(where, options);
   }
 
-  findById(id: string | number) {
+  findById(id: bigint | number): Dict | null {
     return this.findOne({ id });
   }
 
-  findByIds(ids: any[]) {
+  findByIds(ids: number[]): Dict[] {
     const data = this.find({ id: { '$in': ids } });
     if (!data.length) {
       return data;
     }
   }
 
-  insert(data: Dict) {
+  insert(data: Dict): Dict {
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table).insert(data);
-    return this.db.prepare(sql).run(...params);
+    const { lastInsertRowid } = this.db.prepare(sql).run(...params);
+    return this.findById(lastInsertRowid);
   }
 
-  update(where: Dict, data: Dict) {
+  update(where: Dict, data: Dict): Dict {
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table)
       .where(where)
       .update(data);
-    return this.db.prepare(sql).run(...params);
+    const { lastInsertRowid } = this.db.prepare(sql).run(...params);
+    this.changed = {};
+    return this.findById(lastInsertRowid);
   }
 
-  upsert(data: Dict) {
+  updateAttributes(data: Dict): Dict {
+    if (!this.pk) {
+      throw new Error('updateAttributes must be called on instance');
+    }
+    return this.update({ id: this.pk }, data);
+  }
+
+  upsert(data: Dict): Dict {
     if (!data.id) {
       throw new Error('ID not found');
     }
@@ -157,14 +180,14 @@ export class Model {
     return this.insert(data);
   }
 
-  save() {
+  save(): Dict {
     if (!this.pk) {
       throw new Error('save must be called on instance');
     }
     return this.update({ id: this.pk }, this.changed);
   }
 
-  deleteById(id: string | number) {
+  deleteById(id: number): boolean {
     const record = this.findById(id);
     if (!record) {
       return false;
@@ -173,10 +196,11 @@ export class Model {
     const { sql, params } = builder.table(this.table)
       .where({ id })
       .delete();
-    return this.db.prepare(sql).run(...params);
+    this.db.prepare(sql).run(...params);
+    return true;
   }
 
-  delete(where: Dict) {
+  delete(where: Dict): Sqlite.RunResult {
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table)
       .where(where)
@@ -184,3 +208,4 @@ export class Model {
     return this.db.prepare(sql).run(...params);
   }
 }
+
