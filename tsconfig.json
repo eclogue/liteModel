@@ -1,17 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
+    "target": "es5",
     "module": "commonjs",
     "declaration": true,
-    "sourceMap": false,
+    "sourceMap": true,
     "allowJs": true,
     "rootDir": "lib",
-    "outDir": "dist",
     "esModuleInterop": true,
     "removeComments": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["lib/**/*", "lib/typings.d.ts"],
+  "include": ["lib/**/*"],
   "exclude": ["node_modules", "dist", "**/__test__", "test", "docs", "tests"]
 }

@@ -1,11 +1,11 @@
 import { Dict } from './interface';
-export default class Builder {
+export declare class Builder {
     sql: Dict;
     _fields: string[];
     tableName: string;
     values: Dict;
     private parser;
-    options: object;
+    options: Dict;
     constructor(options: any);
     table(table: string): Builder;
     isEmpty(data: any): boolean;

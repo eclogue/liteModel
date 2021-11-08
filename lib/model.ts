@@ -1,21 +1,6 @@
 import Sqlite from 'better-sqlite3';
-import Builder from './builder';
+import { Builder } from './builder';
 import { Dict, Definition } from './interface';
-
-class Database {
-  readonly db: Sqlite.Database | null;
-  private static instance: Database;
-  private constructor(file: string, options: Dict = {}) {
-    this.db = Sqlite(file, options)
-  }
-
-  static getInstance(file: string, options: Dict = {}) {
-    if (Database.instance) {
-      return Database.instance;
-    }
-    return new Database(file, options);
-  }
-}
 
 export class Model {
   db: Sqlite.Database;
@@ -25,20 +10,19 @@ export class Model {
   attributes: Dict;
   changed: Dict;
   pk: string;
-  constructor(definition: Definition = {}, dbFile?: string, table?: string,) {
+  constructor(definition: Definition = {}, dbFile?: string, table?: string) {
     this.definition = definition;
     this.attributes = {};
     this.changed = {};
     this.dbFile = dbFile;
     this.table = table;
+    this.pk = '';
+    this.initialize();
   }
 
-  initialize() {
-    if (!this.db && this.dbFile) {
-      this.db = Database.getInstance(this.dbFile).db;
-    }
+  initialize(): Model {
     if (this.pk) {
-      return;
+      return this;
     }
     for (const key in this.definition) {
       if (this.definition[key].pk) {
@@ -46,20 +30,19 @@ export class Model {
         break;
       }
     }
+    return this;
   }
 
-  attr(name: string, value: any) {
-    if (name === this.pk) {
-      this.pk = value;
-    }
+  attr(name: string, value: any): void {
     this.attributes[name] = value;
   }
 
-  clone<T>(instance: T): T {
+  clone<T extends Model>(instance: T): T {
     return Object.assign(Object.create(Model.prototype), instance);
   }
 
-  instance(data: Dict) {
+  instance(data: Dict): Model {
+    this.changed = {};
     const instance = this.clone(this);
     for (const key in data) {
       instance.attr(key, data[key]);
@@ -82,9 +65,13 @@ export class Model {
       },
       set(target: any, key: string, value: any): boolean {
         if (value instanceof Function) {
-          target[key] = value;
-        } else {
-          target.changed[key] = value;
+          return Reflect.set(target, key, value);
+        }
+        if (Reflect.has(target.attributes, key)) {
+          Reflect.set(target.changed, key, value);
+        }
+        if (Reflect.has(instance, key)) {
+          return instance[key] = value;
         }
         return true;
       }
@@ -105,7 +92,7 @@ export class Model {
     return this.db.exec(sql);
   }
 
-  find(where: Dict, options: Dict = {}): Dict[] {
+  find(where: Dict, options: Dict = {}): Model[] {
     const { limit, offset, order, fields, group } = options;
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table)
@@ -117,59 +104,60 @@ export class Model {
       .offset(offset)
       .select();
     const stmt = this.db.prepare(sql);
-    return stmt.all(...params)
+    const res = stmt.all(...params);
+    return res.map(item => {
+      return this.instance(item);
+    })
   }
 
 
-  findOne(where: Dict, options: Dict = {}): Dict | null {
+  findOne(where: Dict, options: Dict = {}): Model | null {
     options.limit = 1;
     const res = this.find(where, options);
     if (res.length) {
-      return this.instance(res[0]);
+      return res[0];
     }
     return null;
   }
 
-  findAll(where: Dict, options: Dict = {}): Dict[] {
+  findAll(where: Dict, options: Dict = {}): Model[] {
     return this.find(where, options);
   }
 
-  findById(id: bigint | number): Dict | null {
+  findById(id: bigint | number): Model | null {
     return this.findOne({ id });
   }
 
-  findByIds(ids: number[]): Dict[] {
+  findByIds(ids: number[]): Model[] {
     const data = this.find({ id: { '$in': ids } });
     if (!data.length) {
       return data;
     }
   }
 
-  insert(data: Dict): Dict {
+  insert(data: Dict): Model {
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table).insert(data);
     const { lastInsertRowid } = this.db.prepare(sql).run(...params);
     return this.findById(lastInsertRowid);
   }
 
-  update(where: Dict, data: Dict): Dict {
+  update(where: Dict, data: Dict): any {
     const builder = new Builder({});
     const { sql, params } = builder.table(this.table)
       .where(where)
       .update(data);
-    const { lastInsertRowid } = this.db.prepare(sql).run(...params);
-    this.changed = {};
-    return this.findById(lastInsertRowid);
+    return this.db.prepare(sql).run(...params);
   }
 
-  updateAttributes(data: Dict): Dict {
+  updateAttributes(data: Dict): Model {
     if (!this.pk) {
       throw new Error('updateAttributes must be called on instance');
     }
     return this.update({ id: this.pk }, data);
   }
 
-  upsert(data: Dict): Dict {
+  upsert(data: Dict): Model {
     if (!data.id) {
       throw new Error('ID not found');
     }
@@ -180,11 +168,12 @@ export class Model {
     return this.insert(data);
   }
 
-  save(): Dict {
-    if (!this.pk) {
+  save(): Model {
+    if (!this.pk || !this.attributes[this.pk]) {
       throw new Error('save must be called on instance');
     }
-    return this.update({ id: this.pk }, this.changed);
+    this.update({ id: this.attributes[this.pk] }, this.changed);
+    return this.findById(this.attributes[this.pk]);
   }
 
   deleteById(id: number): boolean {

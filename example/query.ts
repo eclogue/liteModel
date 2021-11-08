@@ -1,5 +1,5 @@
-const { Model } = require('../dist/model');
-const path = require('path');
+import { Model } from '../lib';
+import path from 'path';
 
 class User extends Model {
   dbFile = path.resolve('./test.db');
@@ -12,7 +12,7 @@ class User extends Model {
   }
 }
 const model = new User();
-const res = model.exec(`CREATE TABLE users (
+const res = model.exec(`CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name CHAR(50) NOT NULL,
   gender CHAR(10) CHECK(gender IN('male', 'female', 'unknown')) NOT NULL,

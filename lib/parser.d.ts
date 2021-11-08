@@ -6,7 +6,7 @@ interface Node {
     isChild: boolean;
     connector?: string;
 }
-export default class Parser {
+export declare class Parser {
     private tree;
     constructor();
     genNode(entities: any, isChild?: boolean): void;

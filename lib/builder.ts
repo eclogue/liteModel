@@ -1,15 +1,15 @@
-import Parser from "./parser";
+import { Parser } from "./parser";
 import { Dict } from './interface';
 import { sprintf } from 'printj';
 
 
-export default class Builder {
+export class Builder {
   sql: Dict;
   _fields: string[];
   tableName: string;
   values: Dict;
   private parser: Parser;
-  options: object;
+  options: Dict;
 
   constructor(options: any) {
     this.options = options;

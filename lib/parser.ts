@@ -29,13 +29,13 @@ interface Node {
   connector?: string;
 }
 
-export default class Parser {
+export class Parser {
   private tree: Node[];
   constructor() {
     this.tree = [];
   }
 
-  genNode(entities: any, isChild: boolean = false) {
+  genNode(entities: any, isChild = false): void {
     Object.entries(entities).forEach((item: any[]) => {
       const key: string = item[0];
       const v: any = item[1];
@@ -80,7 +80,7 @@ export default class Parser {
   }
 
 
-  parse(entities: any) {
+  parse(entities: any): { sql: string, params: any[] } {
     this.genNode(entities);
     const sql: string[] = [];
     let prev: Node;
@@ -156,12 +156,7 @@ export default class Parser {
     return name.toUpperCase().replace('$', '') + ' (%s) ';
   }
 
-  free() {
+  free(): void {
     this.tree = [];
   }
 }
-
-
-// let p = new Parser();
-// let r = p.parse({ a: 1, b: { $gt: 7, $lt: 9 }, c: { $in: [3, 4, 5] } });
-// console.log('%j', r);
