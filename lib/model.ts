@@ -1,40 +1,44 @@
 import Sqlite from 'better-sqlite3';
 import { Builder } from './builder';
-import { Dict, Definition } from './interface';
+import { Dict, Schema, ModelOpts } from './interface';
+import DB from './db';
+import { isEmpty, pick } from 'ramda';
 
 export class Model {
-  db: Sqlite.Database;
-  dbFile: string;
-  table: string;
-  definition: Definition;
-  attributes: Dict;
-  changed: Dict;
-  pk: string;
-  constructor(definition: Definition = {}, dbFile?: string, table?: string) {
-    this.definition = definition;
-    this.attributes = {};
-    this.changed = {};
-    this.dbFile = dbFile;
-    this.table = table;
-    this.pk = '';
-    this.initialize();
+  private _db: DB;
+  private _dbFile: string;
+  private _table: string;
+  private _schema: Schema;
+  private _attributes: Dict;
+  private _changed: Dict;
+  private _pk: string[];
+  constructor(options: ModelOpts) {
+    this._attributes = {};
+    this._changed = {};
+    this._pk = [];
+    this._schema = options.schema || {};
+    this.initialize(options);
   }
 
-  initialize(): Model {
-    if (this.pk) {
-      return this;
+  get db(): Sqlite.Database {
+    return this._db.db;
+  }
+
+  initialize(config: ModelOpts): void {
+    if (this._db) {
+      return;
     }
-    for (const key in this.definition) {
-      if (this.definition[key].pk) {
-        this.pk = key;
-        break;
+    this._db = DB.getInstance(this._dbFile, config.dbOptions);
+    for (const key in this._schema) {
+      if (this._schema[key].pk) {
+        this._pk.push(key);
       }
     }
-    return this;
+    return;
   }
 
   attr(name: string, value: any): void {
-    this.attributes[name] = value;
+    this._attributes[name] = value;
   }
 
   clone<T extends Model>(instance: T): T {
@@ -42,7 +46,8 @@ export class Model {
   }
 
   instance(data: Dict): Model {
-    this.changed = {};
+    this._changed = {};
+    this._attributes = {};
     const instance = this.clone(this);
     for (const key in data) {
       instance.attr(key, data[key]);
@@ -52,11 +57,11 @@ export class Model {
         return new target(...args);
       },
       get(target: any, key: string) {
-        if (Reflect.has(target.changed, key)) {
-          return Reflect.get(target.changed, key);
+        if (Reflect.has(target._changed, key)) {
+          return Reflect.get(target._changed, key);
         }
-        if (Reflect.has(target.attributes, key)) {
-          return Reflect.get(target.attributes, key);
+        if (Reflect.has(target._attributes, key)) {
+          return Reflect.get(target._attributes, key);
         }
         if (Reflect.has(instance, key)) {
           return instance[key];
@@ -67,8 +72,8 @@ export class Model {
         if (value instanceof Function) {
           return Reflect.set(target, key, value);
         }
-        if (Reflect.has(target.attributes, key)) {
-          Reflect.set(target.changed, key, value);
+        if (Reflect.has(target._attributes, key)) {
+          Reflect.set(target._changed, key, value);
         }
         if (Reflect.has(instance, key)) {
           return instance[key] = value;
@@ -81,7 +86,7 @@ export class Model {
   }
 
   toObject(): Dict {
-    return this.attributes;
+    return this._attributes;
   }
 
   toJSON(): Dict {
@@ -95,7 +100,7 @@ export class Model {
   find(where: Dict, options: Dict = {}): Model[] {
     const { limit, offset, order, fields, group } = options;
     const builder = new Builder({});
-    const { sql, params } = builder.table(this.table)
+    const { sql, params } = builder.table(this._table)
       .where(where)
       .fields(fields)
       .order(order)
@@ -137,24 +142,26 @@ export class Model {
 
   insert(data: Dict): Model {
     const builder = new Builder({});
-    const { sql, params } = builder.table(this.table).insert(data);
+    const { sql, params } = builder.table(this._table).insert(data);
     const { lastInsertRowid } = this.db.prepare(sql).run(...params);
     return this.findById(lastInsertRowid);
   }
 
-  update(where: Dict, data: Dict): any {
+  update(where: Dict, data: Dict): Model[] {
     const builder = new Builder({});
-    const { sql, params } = builder.table(this.table)
+    const { sql, params } = builder.table(this._table)
       .where(where)
       .update(data);
-    return this.db.prepare(sql).run(...params);
+    this.db.prepare(sql).run(...params);
+    return this.find(where);
   }
 
   updateAttributes(data: Dict): Model {
-    if (!this.pk) {
+    if (!this._pk) {
       throw new Error('updateAttributes must be called on instance');
     }
-    return this.update({ id: this.pk }, data);
+    const [instance] = this.update({ id: this._pk }, data);
+    return instance;
   }
 
   upsert(data: Dict): Model {
@@ -163,17 +170,22 @@ export class Model {
     }
     const record = this.findById(data.id);
     if (record) {
-      return this.update({ id: data.id }, data);
+      const [instance] = this.update({ id: data.id }, data);
+      return instance;
     }
     return this.insert(data);
   }
 
   save(): Model {
-    if (!this.pk || !this.attributes[this.pk]) {
+    const pk = pick(this._pk, this._attributes)
+    if (!this._pk || isEmpty(pk)) {
       throw new Error('save must be called on instance');
     }
-    this.update({ id: this.attributes[this.pk] }, this.changed);
-    return this.findById(this.attributes[this.pk]);
+    if (!Object.keys(this._changed).length) {
+      return this;
+    }
+    const [instance] = this.update(pk, this._changed);
+    return instance;
   }
 
   deleteById(id: number): boolean {
@@ -182,7 +194,7 @@ export class Model {
       return false;
     }
     const builder = new Builder({});
-    const { sql, params } = builder.table(this.table)
+    const { sql, params } = builder.table(this._table)
       .where({ id })
       .delete();
     this.db.prepare(sql).run(...params);
@@ -191,7 +203,7 @@ export class Model {
 
   delete(where: Dict): Sqlite.RunResult {
     const builder = new Builder({});
-    const { sql, params } = builder.table(this.table)
+    const { sql, params } = builder.table(this._table)
       .where(where)
       .delete();
     return this.db.prepare(sql).run(...params);

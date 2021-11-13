@@ -11,7 +11,7 @@ export class Builder {
   private parser: Parser;
   options: Dict;
 
-  constructor(options: any) {
+  constructor(options: Dict) {
     this.options = options;
     this.parser = new Parser();
     this.tableName = '';
@@ -25,7 +25,7 @@ export class Builder {
     return this;
   }
 
-  isEmpty(data: any): boolean {
+  isEmpty(data: string[] | string | Dict): boolean {
     if (!data) {
       return true;
     }
@@ -43,7 +43,7 @@ export class Builder {
     return this;
   }
 
-  where(condition: any): Builder {
+  where(condition: Dict): Builder {
     if (this.isEmpty(condition)) {
       return this;
     }
@@ -79,7 +79,7 @@ export class Builder {
     return this;
   }
 
-  group(field: string | string[]) {
+  group(field: string | string[]): Builder {
     if (this.isEmpty(field)) {
       return this;
     }
@@ -90,7 +90,7 @@ export class Builder {
     return this;
   }
 
-  select(options: Dict | null = null) {
+  select(options: Dict | null = null): { sql: string, params: any[] } {
     const select = 'SELECT %s FROM `%s` %s';
     const fields = this.isEmpty(this._fields) ? '*' : this._fields.join(',');
     const { sql, params } = this.toSql();
@@ -99,7 +99,7 @@ export class Builder {
     return { sql: sqlStr, params };
   }
 
-  delete() {
+  delete(): { sql: string, params: any[] } {
     const delSql = 'DELETE FROM `%s` %s'
     const { sql, params } = this.toSql();
     const sqlStr = sprintf(delSql, this.tableName, sql);
@@ -107,7 +107,7 @@ export class Builder {
     return { sql: sqlStr, params };
   }
 
-  update(data: Dict, options: Dict = {}) {
+  update(data: Dict, options: Dict = {}): { sql: string, params: any[] } {
     const setSql: string[] = [];
     const changed = [];
     Object.entries(data).forEach(elm => {
@@ -127,7 +127,7 @@ export class Builder {
     return { sql: sqlStr, params: changed };
   }
 
-  insert(data: Dict) {
+  insert(data: Dict): { sql: string, params: any[] } {
     const fields: string[] = [];
     const params: any[] = [];
     for (const field in data) {
@@ -138,10 +138,11 @@ export class Builder {
     const placeholder = fields.map(_ => '?').join(',');
     const sql = 'INSERT INTO `%s` (%s) VALUES (%s)';
     const preSql = sprintf(sql, this.tableName, fieldStr, placeholder);
+    console.log('toSql:', { preSql, params })
     return { sql: preSql, params };
   }
 
-  toSql() {
+  toSql(): { sql: string, params: any[] } {
     const sqlObj: string[] = [];
     const values: any[] = []
     const sequence = ['where', 'group', 'order', 'offset', 'limit'];
@@ -157,6 +158,7 @@ export class Builder {
         values.push(params);
       }
     });
+    console.log('toSql:', { sql: sqlObj.join(' '), params: values })
     return { sql: sqlObj.join(' '), params: values };
   }
 
