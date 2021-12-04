@@ -65,6 +65,7 @@ export class Parser {
           isChild,
         };
         this.tree.push(node);
+
         this.genNode(value, true);
       }
     });
@@ -121,7 +122,7 @@ export class Parser {
     Object.entries(node.value).forEach(element => {
       const operator: string = element[0];
       const value: any = element[1];
-      const name = `$${node.name}`;
+      // const name = `$${node.name}`;
       const temp: any[] = [field];
       if (operator === '$inc') {
         temp.push(this.increment(node.name, value));
@@ -131,8 +132,13 @@ export class Parser {
         values.push(value);
       } else {
         const func = this.sqlFunction(operator);
-        temp.push(sprintf(func, name));
-        values.push({ [name]: value?.toString() });
+        if (Array.isArray(value)) {
+          temp.push(sprintf(func, Array(value.length).fill('?').join(',')));
+          value.map(v => values.push(v));
+        } else {
+          temp.push(sprintf(func, '?'));
+          values.push(value?.toString());
+        }
       }
       temp.push(connector);
       fieldStr += temp.join(' ');
@@ -153,7 +159,7 @@ export class Parser {
   }
 
   private sqlFunction(name: string): string {
-    return name.toUpperCase().replace('$', '') + ' (%s) ';
+    return name.toUpperCase().replace('$', '') + '(%s)';
   }
 
   free(): void {

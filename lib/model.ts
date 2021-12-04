@@ -6,9 +6,8 @@ import { isEmpty, pick } from 'ramda';
 
 export class Model {
   private _db: DB;
-  private _dbFile: string;
   private _table: string;
-  private _schema: Schema;
+  private _schema: Schema = {};
   private _attributes: Dict;
   private _changed: Dict;
   private _pk: string[];
@@ -16,7 +15,6 @@ export class Model {
     this._attributes = {};
     this._changed = {};
     this._pk = [];
-    this._schema = options.schema || {};
     this.initialize(options);
   }
 
@@ -25,10 +23,14 @@ export class Model {
   }
 
   initialize(config: ModelOpts): void {
+    console.log(config);
     if (this._db) {
       return;
     }
-    this._db = DB.getInstance(this._dbFile, config.dbOptions);
+    this._db = DB.getInstance(config.dbFile, config.dbOptions);
+    if (config.schema) {
+      this._schema = config.schema;
+    }
     for (const key in this._schema) {
       if (this._schema[key].pk) {
         this._pk.push(key);
@@ -110,11 +112,18 @@ export class Model {
       .select();
     const stmt = this.db.prepare(sql);
     const res = stmt.all(...params);
+    if (options.rows) {
+      return res;
+    }
     return res.map(item => {
       return this.instance(item);
     })
   }
 
+  count(where: Dict): number {
+    const res = this.findOne(where, { fields: ['count(*) as count'] });
+    return Number(res.count);
+  }
 
   findOne(where: Dict, options: Dict = {}): Model | null {
     options.limit = 1;
@@ -134,10 +143,10 @@ export class Model {
   }
 
   findByIds(ids: number[]): Model[] {
-    const data = this.find({ id: { '$in': ids } });
-    if (!data.length) {
-      return data;
-    }
+    return this.find({ id: { '$in': ids } });
+  }
+  create(data: Dict): Model {
+    return this.insert(data);
   }
 
   insert(data: Dict): Model {
@@ -188,6 +197,15 @@ export class Model {
     return instance;
   }
 
+
+  remove(): Sqlite.RunResult {
+    const pk = pick(this._pk, this._attributes)
+    if (!this._pk || isEmpty(pk)) {
+      throw new Error('save must be called on instance');
+    }
+
+    return this.delete(pk);
+  }
   deleteById(id: number): boolean {
     const record = this.findById(id);
     if (!record) {

@@ -42,7 +42,7 @@ model.insert({
 //   age: 31,
 //   mail: 'jerry@world.cc'
 // });
-console.log(model.findOne().table);
+console.log(model.findOne({ id: { $in: [1, 2] } }).table);
 // const users = model.find({ id: { $gte: 1 } });
 // users.map((user) => {
 //   console.log('>>>>', user);

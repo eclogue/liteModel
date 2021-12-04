@@ -58,7 +58,7 @@ export class Builder {
     }
     Object.entries(orderBy).forEach((elm => {
       const [field, sort] = elm;
-      this.sql.order = { sql: `ORDER BY ? ?`, params: [field, sort] };
+      this.sql.order = { sql: `ORDER BY ${field} ${sort}`, params: [] };
     }))
     return this;
   }
@@ -84,8 +84,8 @@ export class Builder {
       return this;
     }
     this.sql.group = {
-      sql: `GROUP BY ?`,
-      params: [field?.toString()]
+      sql: `GROUP BY ${field.toString()}`,
+      params: []
     };
     return this;
   }
@@ -144,7 +144,7 @@ export class Builder {
 
   toSql(): { sql: string, params: any[] } {
     const sqlObj: string[] = [];
-    const values: any[] = []
+    const values: any[] = [];
     const sequence = ['where', 'group', 'order', 'offset', 'limit'];
     sequence.forEach(item => {
       if (!this.sql[item]) {
@@ -158,7 +158,6 @@ export class Builder {
         values.push(params);
       }
     });
-    console.log('toSql:', { sql: sqlObj.join(' '), params: values })
     return { sql: sqlObj.join(' '), params: values };
   }
 
