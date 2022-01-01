@@ -138,7 +138,6 @@ export class Builder {
     const placeholder = fields.map(_ => '?').join(',');
     const sql = 'INSERT INTO `%s` (%s) VALUES (%s)';
     const preSql = sprintf(sql, this.tableName, fieldStr, placeholder);
-    console.log('toSql:', { preSql, params })
     return { sql: preSql, params };
   }
 

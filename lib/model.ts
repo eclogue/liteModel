@@ -2,12 +2,13 @@ import Sqlite from 'better-sqlite3';
 import { Builder } from './builder';
 import { Dict, Schema, ModelOpts } from './interface';
 import DB from './db';
-import { isEmpty, pick } from 'ramda';
+import { isEmpty, pick, has, equals } from 'ramda';
 
 export class Model {
   private _db: DB;
-  private _table: string;
-  private _schema: Schema = {};
+  protected _table: string;
+  protected _schema: Schema = {};
+  protected _dbFile: string;
   private _attributes: Dict;
   private _changed: Dict;
   private _pk: string[];
@@ -23,14 +24,19 @@ export class Model {
   }
 
   initialize(config: ModelOpts): void {
-    console.log(config);
     if (this._db) {
       return;
     }
-    this._db = DB.getInstance(config.dbFile, config.dbOptions);
+    if (config.dbFile) {
+      this._dbFile = config.dbFile;
+    }
     if (config.schema) {
       this._schema = config.schema;
     }
+    if (config.table) {
+      this._table = config.table;
+    }
+    this._db = DB.getInstance(this._dbFile, config.dbOptions);
     for (const key in this._schema) {
       if (this._schema[key].pk) {
         this._pk.push(key);
@@ -74,7 +80,7 @@ export class Model {
         if (value instanceof Function) {
           return Reflect.set(target, key, value);
         }
-        if (Reflect.has(target._attributes, key)) {
+        if (Reflect.has(target._attributes, key) && !equals(Reflect.get(target._attributes, key), value)) {
           Reflect.set(target._changed, key, value);
         }
         if (Reflect.has(instance, key)) {
@@ -169,24 +175,30 @@ export class Model {
     if (!this._pk) {
       throw new Error('updateAttributes must be called on instance');
     }
-    const [instance] = this.update({ id: this._pk }, data);
-    return instance;
+    const current = this._attributes;
+    Object.entries(data).map(item => {
+      const [key, value] = item;
+      if (has(key, current)) {
+        this._changed[key] = value;
+      }
+    });
+
+    return this.save();
   }
 
   upsert(data: Dict): Model {
-    if (!data.id) {
-      throw new Error('ID not found');
+    if (data.id) {
+      const record = this.findById(data.id);
+      if (record) {
+        return record.updateAttributes(data);
+      }
     }
-    const record = this.findById(data.id);
-    if (record) {
-      const [instance] = this.update({ id: data.id }, data);
-      return instance;
-    }
+
     return this.insert(data);
   }
 
   save(): Model {
-    const pk = pick(this._pk, this._attributes)
+    const pk = pick(this._pk, this._attributes);
     if (!this._pk || isEmpty(pk)) {
       throw new Error('save must be called on instance');
     }

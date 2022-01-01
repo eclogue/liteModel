@@ -1,17 +1,12 @@
-import { Model } from '../lib';
+import { Model, Schema } from '../lib';
 import path from 'path';
-
+const dbFile = path.resolve('./test.db');
 class User extends Model {
-  dbFile = path.resolve('./test.db');
-  table = 'users';
-  constructor() {
-    super();
-    this.dbFile = './test.db';
-    this.table = 'users';
-    this.initialize();
-  }
+  _table = 'users';
 }
-const model = new User();
+const model = new User({
+  dbFile, schema: { id: { type: 'string', pk: true } }
+});
 const res = model.exec(`CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name CHAR(50) NOT NULL,
@@ -36,5 +31,12 @@ model.insert({
 //   age: 31,
 //   mail: 'jerry@world.cc'
 // });
-const records = model.findOne({ id: { $gte: 1 } });
-console.log(records);
+const user = model.findOne({ id: { $gte: 1 } }).toJSON();
+const u2 = model.upsert({
+  id: user.id,
+  name: 'tommy',
+  gender: 'male',
+  age: user.age + 1,
+  mail: 'tommy@hello.cc'
+})
+console.log(user, u2);

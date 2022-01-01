@@ -4,8 +4,9 @@ export type Dict = {
 }
 
 export interface ColumnSchema {
-  name: string;
+
   type: string;
+  name?: string;
   autoTimestamp?: boolean;
   rules?: string[];
   pk?: boolean;
@@ -16,7 +17,7 @@ export interface Schema {
 
 export interface ModelOpts {
   dbFile: string;
-  table: string;
-  dbOptions: Options;
-  schema: Schema;
+  table?: string;
+  dbOptions?: Options;
+  schema?: Schema;
 }
