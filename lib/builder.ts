@@ -135,7 +135,7 @@ export class Builder {
       params.push(data[field]);
     }
     const fieldStr = fields.join(',');
-    const placeholder = fields.map(_ => '?').join(',');
+    const placeholder = fields.map(() => '?').join(',');
     const sql = 'INSERT INTO `%s` (%s) VALUES (%s)';
     const preSql = sprintf(sql, this.tableName, fieldStr, placeholder);
     return { sql: preSql, params };

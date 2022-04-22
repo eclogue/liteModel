@@ -3,9 +3,13 @@ import path from 'path';
 const dbFile = path.resolve('./test.db');
 class User extends Model {
   _table = 'users';
+  constructor(options) {
+    super(options);
+  }
 }
 const model = new User({
-  dbFile, schema: { id: { type: 'string', pk: true } }
+  dbFile,
+  schema: { id: { type: 'string', pk: true } }
 });
 const res = model.exec(`CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,18 +29,13 @@ model.insert({
   mail: 'tommy@hello.cc'
 });
 
-// model.insert({
-//   name: 'jerry',
-//   gender: 'female',
-//   age: 31,
-//   mail: 'jerry@world.cc'
-// });
-const user = model.findOne({ id: { $gte: 1 } }).toJSON();
+const user = model.findOne({ id: { $gte: 1, $lte: 200 } }).toJSON();
+console.log('uuuuuuuuuu', user);
 const u2 = model.upsert({
   id: user.id,
   name: 'tommy',
   gender: 'male',
   age: user.age + 1,
   mail: 'tommy@hello.cc'
-})
-console.log(user, u2);
+}) as any;
+console.log(user.name, u2.age);

@@ -16,7 +16,7 @@ export interface Schema {
 }
 
 export interface ModelOpts {
-  dbFile: string;
+  dbFile?: string;
   table?: string;
   dbOptions?: Options;
   schema?: Schema;

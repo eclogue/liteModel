@@ -35,10 +35,21 @@ export class Parser {
     this.tree = [];
   }
 
-  genNode(entities: any, isChild = false): void {
-    Object.entries(entities).forEach((item: any[]) => {
-      const key: string = item[0];
-      const v: any = item[1];
+  getNodeByKV(key: string, value: any): void {
+    Object.entries(value).map(([op, v]) => {
+      const node: Node = {
+        type: 'field',
+        name: key,
+        value: { [op]: v },
+        isChild: true,
+        connector: ' AND '
+      };
+      this.tree.push(node);
+    });
+  }
+
+  genNode(entities: Dict, isChild = false): void {
+    Object.entries(entities).forEach(([key, v]: [key: string, v: any]) => {
       const value = v && typeof v === 'object' ? v : { $eq: v };
       if (!(key in LOGICAL)) {
         if (Array.isArray(value)) {
@@ -46,16 +57,7 @@ export class Parser {
             this.genNode(i, true);
           });
         } else {
-          Object.keys(value).map(op => {
-            const node: Node = {
-              type: 'field',
-              name: key,
-              value: { [op]: value[op] },
-              isChild: true,
-              connector: ' AND '
-            };
-            this.tree.push(node);
-          });
+          this.getNodeByKV(key, value);
         }
       } else {
         const node: Node = {
@@ -86,7 +88,7 @@ export class Parser {
     const sql: string[] = [];
     let prev: Node;
     let level = 0;
-    const params: any[] = [];
+    const params = [];
     this.tree.forEach((node: Node) => {
       if (node.type === 'field') {
         if (prev && prev.type !== 'field') {
@@ -118,12 +120,12 @@ export class Parser {
     let fieldStr = '';
     const field = '`' + node.name + '`';
     const connector = node.connector?.toUpperCase().substr(1);
-    const values: any[] = [];
+    const values = [];
     Object.entries(node.value).forEach(element => {
       const operator: string = element[0];
-      const value: any = element[1];
+      const value = element[1];
       // const name = `$${node.name}`;
-      const temp: any[] = [field];
+      const temp = [field];
       if (operator === '$inc') {
         temp.push(this.increment(node.name, value));
       } else if (OPERATOR[operator]) {

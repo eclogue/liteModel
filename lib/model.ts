@@ -2,26 +2,29 @@ import Sqlite from 'better-sqlite3';
 import { Builder } from './builder';
 import { Dict, Schema, ModelOpts } from './interface';
 import DB from './db';
-import { isEmpty, pick, has, equals } from 'ramda';
+import { isEmpty, pick, has } from 'ramda';
 
 export class Model {
   private _db: DB;
   protected _table: string;
   protected _schema: Schema = {};
   protected _dbFile: string;
-  private _attributes: Dict;
   private _changed: Dict;
   private _pk: string[];
+  readonly _options: ModelOpts;
+  public _attributes: Dict;
   constructor(options: ModelOpts) {
     this._attributes = {};
     this._changed = {};
     this._pk = [];
+    this._options = options;
     this.initialize(options);
   }
 
   get db(): Sqlite.Database {
     return this._db.db;
   }
+
 
   initialize(config: ModelOpts): void {
     if (this._db) {
@@ -49,48 +52,24 @@ export class Model {
     this._attributes[name] = value;
   }
 
-  clone<T extends Model>(instance: T): T {
-    return Object.assign(Object.create(Model.prototype), instance);
+  clone(): Model {
+    return new (this.constructor as new (options: ModelOpts) => this)(this._options as ModelOpts)
   }
 
   instance(data: Dict): Model {
-    this._changed = {};
-    this._attributes = {};
-    const instance = this.clone(this);
+    const instance = this.clone();
     for (const key in data) {
       instance.attr(key, data[key]);
+      Object.defineProperty(instance, key, {
+        set: (value: any) => {
+          instance.attr(key, value);
+        },
+        get: () => {
+          return instance._attributes[key];
+        }
+      });
     }
-    const handler = {
-      constructor(target, args) {
-        return new target(...args);
-      },
-      get(target: any, key: string) {
-        if (Reflect.has(target._changed, key)) {
-          return Reflect.get(target._changed, key);
-        }
-        if (Reflect.has(target._attributes, key)) {
-          return Reflect.get(target._attributes, key);
-        }
-        if (Reflect.has(instance, key)) {
-          return instance[key];
-        }
-        return undefined;
-      },
-      set(target: any, key: string, value: any): boolean {
-        if (value instanceof Function) {
-          return Reflect.set(target, key, value);
-        }
-        if (Reflect.has(target._attributes, key) && !equals(Reflect.get(target._attributes, key), value)) {
-          Reflect.set(target._changed, key, value);
-        }
-        if (Reflect.has(instance, key)) {
-          return instance[key] = value;
-        }
-        return true;
-      }
-    };
-    const proxy = new Proxy(instance, handler);
-    return proxy;
+    return instance;
   }
 
   toObject(): Dict {
@@ -158,6 +137,7 @@ export class Model {
   insert(data: Dict): Model {
     const builder = new Builder({});
     const { sql, params } = builder.table(this._table).insert(data);
+    console.log(sql, params);
     const { lastInsertRowid } = this.db.prepare(sql).run(...params);
     return this.findById(lastInsertRowid);
   }
