@@ -49,7 +49,18 @@ export class Model {
   }
 
   attr(name: string, value: any): void {
-    this._attributes[name] = value;
+    if (this._attributes[name] !== value) {
+      this._attributes[name] = value;
+    }
+  }
+
+  getAttr(name: string): any {
+    return this._attributes[name];
+  }
+
+  change(name: string, value: any): void {
+    this.attr(name, value);
+    this._changed[name] = value;
   }
 
   clone(): Model {
@@ -62,10 +73,10 @@ export class Model {
       instance.attr(key, data[key]);
       Object.defineProperty(instance, key, {
         set: (value: any) => {
-          instance.attr(key, value);
+          instance.change(key, value);
         },
         get: () => {
-          return instance._attributes[key];
+          return instance.getAttr(key);
         }
       });
     }
@@ -137,7 +148,6 @@ export class Model {
   insert(data: Dict): Model {
     const builder = new Builder({});
     const { sql, params } = builder.table(this._table).insert(data);
-    console.log(sql, params);
     const { lastInsertRowid } = this.db.prepare(sql).run(...params);
     return this.findById(lastInsertRowid);
   }
