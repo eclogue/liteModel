@@ -1,4 +1,3 @@
-import { Options } from 'better-sqlite3';
 export type Dict = {
   [key: string]: any
 }
@@ -15,9 +14,14 @@ export interface Schema {
   [key: string]: ColumnSchema
 }
 
+export interface Connection {
+  filename: string;
+  mode?: number;
+  driver?: any;
+}
+
 export interface ModelOpts {
-  dbFile?: string;
   table?: string;
-  dbOptions?: Options;
+  connection?: Connection;
   schema?: Schema;
 }

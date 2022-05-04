@@ -1,8 +1,9 @@
-import Sqlite from 'better-sqlite3';
 import { Builder } from './builder';
 import { Dict, Schema, ModelOpts } from './interface';
 import DB from './db';
 import { isEmpty, pick, has } from 'ramda';
+import { ISqlite } from 'sqlite';
+
 
 export class Model {
   private _db: DB;
@@ -12,26 +13,26 @@ export class Model {
   private _changed: Dict;
   private _pk: string[];
   readonly _options: ModelOpts;
-  public _attributes: Dict;
+  private _attributes: Dict;
+  [key: string]: any;
   constructor(options: ModelOpts) {
     this._attributes = {};
     this._changed = {};
     this._pk = [];
     this._options = options;
+    this._connected = false;
     this.initialize(options);
   }
 
-  get db(): Sqlite.Database {
-    return this._db.db;
+  get db(): DB | null {
+    return this._db;
   }
+
 
 
   initialize(config: ModelOpts): void {
     if (this._db) {
       return;
-    }
-    if (config.dbFile) {
-      this._dbFile = config.dbFile;
     }
     if (config.schema) {
       this._schema = config.schema;
@@ -39,12 +40,12 @@ export class Model {
     if (config.table) {
       this._table = config.table;
     }
-    this._db = DB.getInstance(this._dbFile, config.dbOptions);
     for (const key in this._schema) {
       if (this._schema[key].pk) {
         this._pk.push(key);
       }
     }
+    this._db = DB.getInstance(this._dbFile, this._options.connection as ISqlite.Config);
     return;
   }
 
@@ -91,11 +92,12 @@ export class Model {
     return this.toObject();
   }
 
-  exec(sql: string): any {
+  exec(sql: string): Promise<void> {
     return this.db.exec(sql);
   }
 
-  find(where: Dict, options: Dict = {}): Model[] {
+
+  async find(where: Dict, options: Dict = {}): Promise<Model[]> {
     const { limit, offset, order, fields, group } = options;
     const builder = new Builder({});
     const { sql, params } = builder.table(this._table)
@@ -106,62 +108,61 @@ export class Model {
       .limit(limit)
       .offset(offset)
       .select();
-    const stmt = this.db.prepare(sql);
-    const res = stmt.all(...params);
+    const res = await this.db.call('all', sql, params);
     if (options.rows) {
       return res;
     }
-    return res.map(item => {
+    return res.map((item) => {
       return this.instance(item);
     })
   }
 
-  count(where: Dict): number {
-    const res = this.findOne(where, { fields: ['count(*) as count'] });
+  async count(where: Dict): Promise<number> {
+    const res = await this.findOne(where, { fields: ['count(*) as count'] });
     return Number(res.count);
   }
 
-  findOne(where: Dict, options: Dict = {}): Model | null {
+  async findOne(where: Dict, options: Dict = {}): Promise<Model | null> {
     options.limit = 1;
-    const res = this.find(where, options);
+    const res = await this.find(where, options);
     if (res.length) {
       return res[0];
     }
     return null;
   }
 
-  findAll(where: Dict, options: Dict = {}): Model[] {
+  findAll(where: Dict, options: Dict = {}): Promise<Model[]> {
     return this.find(where, options);
   }
 
-  findById(id: bigint | number): Model | null {
+  findById(id: bigint | number): Promise<Model | null> {
     return this.findOne({ id });
   }
 
-  findByIds(ids: number[]): Model[] {
+  findByIds(ids: number[]): Promise<Model[]> {
     return this.find({ id: { '$in': ids } });
   }
-  create(data: Dict): Model {
+
+  async create(data: Dict): Promise<Model> {
     return this.insert(data);
   }
 
-  insert(data: Dict): Model {
+  async insert(data: Dict): Promise<Model> {
     const builder = new Builder({});
     const { sql, params } = builder.table(this._table).insert(data);
-    const { lastInsertRowid } = this.db.prepare(sql).run(...params);
-    return this.findById(lastInsertRowid);
+    const { lastID } = await this.db.call('run', sql, params);
+    return this.findById(lastID);
   }
 
-  update(where: Dict, data: Dict): Model[] {
+  async update(where: Dict, data: Dict): Promise<ISqlite.RunResult> {
     const builder = new Builder({});
     const { sql, params } = builder.table(this._table)
       .where(where)
       .update(data);
-    this.db.prepare(sql).run(...params);
-    return this.find(where);
+    return await this.db.call('run', sql, params);
   }
 
-  updateAttributes(data: Dict): Model {
+  updateAttributes(data: Dict): Promise<Model> {
     if (!this._pk) {
       throw new Error('updateAttributes must be called on instance');
     }
@@ -176,9 +177,9 @@ export class Model {
     return this.save();
   }
 
-  upsert(data: Dict): Model {
+  async upsert(data: Dict): Promise<Model> {
     if (data.id) {
-      const record = this.findById(data.id);
+      const record = await this.findById(data.id);
       if (record) {
         return record.updateAttributes(data);
       }
@@ -187,7 +188,7 @@ export class Model {
     return this.insert(data);
   }
 
-  save(): Model {
+  async save(): Promise<Model> {
     const pk = pick(this._pk, this._attributes);
     if (!this._pk || isEmpty(pk)) {
       throw new Error('save must be called on instance');
@@ -195,12 +196,12 @@ export class Model {
     if (!Object.keys(this._changed).length) {
       return this;
     }
-    const [instance] = this.update(pk, this._changed);
-    return instance;
+    await this.update(pk, this._changed);
+    return this.findOne(pk);
   }
 
 
-  remove(): Sqlite.RunResult {
+  remove(): Promise<ISqlite.RunResult> {
     const pk = pick(this._pk, this._attributes)
     if (!this._pk || isEmpty(pk)) {
       throw new Error('save must be called on instance');
@@ -208,7 +209,8 @@ export class Model {
 
     return this.delete(pk);
   }
-  deleteById(id: number): boolean {
+
+  async deleteById(id: number): Promise<boolean> {
     const record = this.findById(id);
     if (!record) {
       return false;
@@ -217,16 +219,16 @@ export class Model {
     const { sql, params } = builder.table(this._table)
       .where({ id })
       .delete();
-    this.db.prepare(sql).run(...params);
+    await this.db.call('run', sql, params);
     return true;
   }
 
-  delete(where: Dict): Sqlite.RunResult {
+  async delete(where: Dict): Promise<ISqlite.RunResult> {
     const builder = new Builder({});
     const { sql, params } = builder.table(this._table)
       .where(where)
       .delete();
-    return this.db.prepare(sql).run(...params);
+    return await this.db.call('run', sql, params);
   }
 }
 
