@@ -160,7 +160,7 @@ export class Builder {
     return { sql: sqlObj.join(' '), params: values };
   }
 
-  free() {
+  free(): void {
     this._fields = [];
     this.values = [];
     this.sql = {};

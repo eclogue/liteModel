@@ -7,7 +7,8 @@ export interface ColumnSchema {
   type: string;
   name?: string;
   autoTimestamp?: boolean;
-  rules?: string[];
+  encode?: (value: any) => any;
+  decode?: (value: any) => any;
   pk?: boolean;
 }
 export interface Schema {

@@ -1,5 +1,5 @@
 import { Builder } from './builder';
-import { Dict, Schema, ModelOpts } from './interface';
+import { Dict, Schema, ModelOpts, ColumnSchema } from './interface';
 import DB from './db';
 import { isEmpty, pick, has } from 'ramda';
 import { ISqlite } from 'sqlite';
@@ -49,18 +49,49 @@ export class Model {
     return;
   }
 
-  attr(name: string, value: any): void {
+  getFieldSchema(field: string): ColumnSchema | undefined {
+    return this._schema[field];
+  }
+
+
+  encodeFieldValue<T>(filed: string, value: T): T {
+    if (value === undefined) {
+      return value;
+    }
+    const schema = this.getFieldSchema(filed);
+    if (schema) {
+      const md = typeof value === schema.type ? 'encode' : 'decode';
+      if (schema[md]) {
+        return schema[md](value);
+      }
+    }
+    return value;
+  }
+
+  getAttrs(): Dict {
+    return { ...this._attributes, ...this._changed };
+  }
+
+  getAttr(name: string): any {
+    const data = this.getAttrs();
+    return this.encodeFieldValue(name, data[name]);
+  }
+
+  setAttr(name: string, value: any): void {
     if (this._attributes[name] !== value) {
       this._attributes[name] = value;
     }
   }
 
-  getAttr(name: string): any {
-    return this._attributes[name];
+  purify(data: Dict, type: 'encode' | 'decode'): Dict {
+    const res: Dict = {};
+    for (const key in data) {
+      res[key] = this.encodeFieldValue(key, data[key]);
+    }
+    return res;
   }
 
   change(name: string, value: any): void {
-    this.attr(name, value);
     this._changed[name] = value;
   }
 
@@ -71,7 +102,7 @@ export class Model {
   instance(data: Dict): Model {
     const instance = this.clone();
     for (const key in data) {
-      instance.attr(key, data[key]);
+      instance.setAttr(key, data[key]);
       Object.defineProperty(instance, key, {
         set: (value: any) => {
           instance.change(key, value);
@@ -85,7 +116,8 @@ export class Model {
   }
 
   toObject(): Dict {
-    return this._attributes;
+    const attrs = this.getAttrs();
+    return this.purify(attrs, 'decode');
   }
 
   toJSON(): Dict {
@@ -147,30 +179,32 @@ export class Model {
     return this.insert(data);
   }
 
-  async insert(data: Dict): Promise<Model> {
+  async insert(payload: Dict): Promise<Model> {
     const builder = new Builder({});
+    const data = this.purify(payload, 'encode');
     const { sql, params } = builder.table(this._table).insert(data);
     const { lastID } = await this.db.call('run', sql, params);
     return this.findById(lastID);
   }
 
-  async update(where: Dict, data: Dict): Promise<ISqlite.RunResult> {
+  async update(where: Dict, payload: Dict): Promise<ISqlite.RunResult> {
     const builder = new Builder({});
+    const data = this.purify(payload, 'encode');
     const { sql, params } = builder.table(this._table)
       .where(where)
       .update(data);
     return await this.db.call('run', sql, params);
   }
 
-  updateAttributes(data: Dict): Promise<Model> {
+  updateAttributes(payload: Dict): Promise<Model> {
     if (!this._pk) {
       throw new Error('updateAttributes must be called on instance');
     }
     const current = this._attributes;
-    Object.entries(data).map(item => {
+    Object.entries(payload).map(item => {
       const [key, value] = item;
       if (has(key, current)) {
-        this._changed[key] = value;
+        this.change(key, value);
       }
     });
 
@@ -189,7 +223,7 @@ export class Model {
   }
 
   async save(): Promise<Model> {
-    const pk = pick(this._pk, this._attributes);
+    const pk = pick(this._pk, this.getAttrs());
     if (!this._pk || isEmpty(pk)) {
       throw new Error('save must be called on instance');
     }
