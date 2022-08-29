@@ -3,6 +3,7 @@ import { Dict, Schema, ModelOpts, ColumnSchema } from './interface';
 import DB from './db';
 import { isEmpty, pick, has } from 'ramda';
 import { ISqlite } from 'sqlite';
+import { TimestampSchema, PrimarySchema } from './schema';
 
 
 export class Model {
@@ -36,6 +37,11 @@ export class Model {
     }
     if (config.schema) {
       this._schema = config.schema;
+    } else {
+      this._schema = {
+        ...TimestampSchema,
+        ...PrimarySchema
+      }
     }
     if (config.table) {
       this._table = config.table;
@@ -45,7 +51,7 @@ export class Model {
         this._pk.push(key);
       }
     }
-    this._db = DB.getInstance(this._dbFile, this._options.connection as ISqlite.Config);
+    this._db = DB.getInstance({ filename: this._dbFile, debug: this._options.debug, options: this._options.connection as ISqlite.Config });
     return;
   }
 
@@ -56,7 +62,7 @@ export class Model {
 
   encodeFieldValue<T>(filed: string, value: T): T {
     if (value === undefined) {
-      return value;
+      return this._schema[filed]?.default;
     }
     const schema = this.getFieldSchema(filed);
     if (schema) {
@@ -83,7 +89,7 @@ export class Model {
     }
   }
 
-  purify(data: Dict, type: 'encode' | 'decode'): Dict {
+  purify(data: Dict): Dict {
     const res: Dict = {};
     for (const key in data) {
       res[key] = this.encodeFieldValue(key, data[key]);
@@ -117,7 +123,7 @@ export class Model {
 
   toObject(): Dict {
     const attrs = this.getAttrs();
-    return this.purify(attrs, 'decode');
+    return this.purify(attrs);
   }
 
   toJSON(): Dict {
@@ -175,24 +181,57 @@ export class Model {
     return this.find({ id: { '$in': ids } });
   }
 
+  defaultData(): Dict {
+    const payload: Dict = {};
+    Object.entries(this._schema).map(([k, col]: [k: string, col: ColumnSchema]) => {
+      const def = col.default
+      if (typeof def === 'undefined') {
+        return;
+      }
+      if (typeof def === 'function') {
+        const v = def();
+        payload[k] = v;
+      } else {
+        payload[k] = def;
+      }
+    });
+    return payload;
+  }
+
+  async onChange(): Promise<Dict> {
+    const payload: Dict = {};
+    for (const k in this._schema) {
+      const col: ColumnSchema = this._schema[k];
+      const onChange = col.onChange;
+      if (!onChange) {
+        continue;
+      }
+      const v = await Promise.resolve(onChange.call(this));
+      payload[k] = v;
+    }
+    return payload;
+  }
+
   async create(data: Dict): Promise<Model> {
     return this.insert(data);
   }
 
   async insert(payload: Dict): Promise<Model> {
     const builder = new Builder({});
-    const data = this.purify(payload, 'encode');
-    const { sql, params } = builder.table(this._table).insert(data);
+    const data = this.purify(payload);
+    const defaultData = this.defaultData();
+    const { sql, params } = builder.table(this._table).insert({ ...data, ...defaultData });
     const { lastID } = await this.db.call('run', sql, params);
     return this.findById(lastID);
   }
 
   async update(where: Dict, payload: Dict): Promise<ISqlite.RunResult> {
     const builder = new Builder({});
-    const data = this.purify(payload, 'encode');
+    const data = this.purify(payload);
+    const changed = await this.onChange();
     const { sql, params } = builder.table(this._table)
       .where(where)
-      .update(data);
+      .update({ ...changed, ...data });
     return await this.db.call('run', sql, params);
   }
 

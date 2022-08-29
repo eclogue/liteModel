@@ -1,13 +1,16 @@
 import sqlite3 from 'sqlite3'
 import { open, Database, ISqlite } from 'sqlite';
-import { Connection } from './interface';
+import Debug from 'debug'
 
+const debug = Debug('list-model')
 export default class DB {
   static instances: { [key: string]: DB } = {};
   db: Database;
   connecting: any;
-  private constructor(connection: Promise<Database>) {
+  debug: boolean;
+  private constructor({ connection, debug = false }: { connection: Promise<Database>, debug: boolean }) {
     this.db = null;
+    this.debug = debug;
     this.connecting = connection;
   }
 
@@ -18,16 +21,16 @@ export default class DB {
     }
     return this.db;
   }
-  static getInstance(filename: string, options: Partial<ISqlite.Config>): DB {
+  static getInstance({ filename, options, debug = false }: { filename: string, options: Partial<ISqlite.Config>, debug?: boolean }): DB {
     if (DB.instances[filename]) {
       return DB.instances[filename];
     }
-    const db = open({
+    const connection = open({
       filename,
       driver: sqlite3.cached.Database,
       ...options,
     });
-    DB.instances[filename] = new DB(db);
+    DB.instances[filename] = new DB({ connection, debug });
     return DB.instances[filename];
   }
 
@@ -39,6 +42,9 @@ export default class DB {
 
   async call(method: string, sql, params): Promise<any> {
     await this.connect();
+    if (this.debug) {
+      debug('exec sql: %s %j', sql, params);
+    }
     const stmt = await this.db.prepare(sql);
     return stmt[method](params);
   }

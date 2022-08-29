@@ -10,6 +10,8 @@ export interface ColumnSchema {
   encode?: (value: any) => any;
   decode?: (value: any) => any;
   pk?: boolean;
+  default?: any;
+  onChange?: (value: any) => any;
 }
 export interface Schema {
   [key: string]: ColumnSchema
@@ -25,4 +27,5 @@ export interface ModelOpts {
   table?: string;
   connection?: Connection;
   schema?: Schema;
+  debug?: boolean;
 }

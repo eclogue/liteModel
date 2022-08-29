@@ -1,6 +1,7 @@
 import { Model, ModelOpts } from '../lib';
 import path from 'path';
 import assert from 'assert';
+import { merge } from '../lib/schema';
 const dbFile = path.resolve('./test.db');
 
 const connection = {
@@ -8,13 +9,14 @@ const connection = {
 }
 class User extends Model {
   _table = 'users';
-  constructor(optons: ModelOpts) {
-    super(optons);
+  constructor(options: ModelOpts) {
+    super(options);
   }
 }
 const model = new User({
-  schema: { id: { type: 'string', pk: true }, profile: { type: 'object', encode: JSON.stringify, decode: JSON.parse } },
-  connection
+  schema: merge({ profile: { type: 'object', encode: JSON.stringify, decode: JSON.parse } }),
+  connection,
+  debug: true
 });
 const main = async () => {
   await model.exec(`CREATE TABLE IF NOT EXISTS users (
@@ -36,17 +38,19 @@ const main = async () => {
     profile: { bar: 'foo', quiz: 'biz' }
   });
 
-  const user = await model.findOne({ id: { $gte: 1, $lte: 200 } });
+  const user = await model.findOne({ id: { $gte: 1, $lte: 200 } },
+    { order: { id: 'desc', age: 'asc' } }) as User;
   console.log(user.toJSON());
   assert(typeof user.profile === 'object')
-  const check = (await user.findById(user.id));
+  const check = (await user.findById(user.id)) as User;
   console.log('check findById %j', check.toObject());
   const u2 = await model.upsert({
     id: user.id + 1,
     name: 'tommy',
     gender: 'male',
     age: user.age + 1,
-    mail: 'tommy@hello.cc'
+    mail: 'tommy@hello.cc',
+    profile: { bar: 'quz', quiz: 'biz' }
   });
   u2.gender = 'female';
   console.log('user2', u2.toJSON());

@@ -56,10 +56,11 @@ export class Builder {
     if (this.isEmpty(orderBy)) {
       return this;
     }
-    Object.entries(orderBy).forEach((elm => {
-      const [field, sort] = elm;
-      this.sql.order = { sql: `ORDER BY ${field} ${sort}`, params: [] };
+    const orderClause: string[] = [];
+    Object.entries(orderBy).forEach(((elm: string[]) => {
+      orderClause.push(elm.join(' '))
     }))
+    this.sql.order = { sql: `ORDER BY ${orderClause.join(',')}`, params: [] };
     return this;
   }
 
